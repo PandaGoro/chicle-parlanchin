@@ -226,6 +226,42 @@
       gap: 10px;
     }
 
+    .difficulty {
+      display: grid;
+      grid-template-columns: auto auto auto;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      width: fit-content;
+      padding: 10px;
+      border: 1px solid rgba(255, 209, 102, 0.42);
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.26);
+      box-shadow: 0 0 20px rgba(255, 209, 102, 0.12);
+    }
+
+    .difficulty-label {
+      color: var(--gold);
+      font-weight: 900;
+      text-transform: uppercase;
+      font-size: 13px;
+      letter-spacing: 0;
+    }
+
+    .difficulty button {
+      border: 2px solid rgba(255,255,255,0.22);
+      background: rgba(255,255,255,0.08);
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-weight: 900;
+    }
+
+    .difficulty button.active {
+      border-color: var(--gold);
+      background: rgba(255,209,102,0.18);
+    }
+
     .sister-card {
       min-height: 150px;
       display: grid;
@@ -304,6 +340,11 @@
         grid-template-columns: 1fr;
       }
 
+      .difficulty {
+        width: 100%;
+        grid-template-columns: 1fr;
+      }
+
     }
   </style>
 </head>
@@ -329,6 +370,11 @@
         <div class="menu">
           <h1>Les Germanes i el Chicle Parlanchin</h1>
           <p class="intro">Tria amb quina germana comences. Despres hauras d'alliberar les altres dues i tornar amb la mare al rebedor.</p>
+          <div class="difficulty" id="difficultyChoices">
+            <span class="difficulty-label">Dificultat</span>
+            <button type="button" data-difficulty="easy">Mode fàcil</button>
+            <button class="active" type="button" data-difficulty="hard">Mode difícil</button>
+          </div>
           <div class="sisters" id="sisterChoices"></div>
         </div>
       </div>
@@ -347,6 +393,7 @@
     const canvas = document.querySelector("#game");
     const ctx = canvas.getContext("2d");
     const startOverlay = document.querySelector("#startOverlay");
+    const difficultyChoices = document.querySelector("#difficultyChoices");
     const endOverlay = document.querySelector("#endOverlay");
     const endTitle = document.querySelector("#endTitle");
     const endText = document.querySelector("#endText");
@@ -366,7 +413,8 @@
 
     const W = canvas.width;
     const H = canvas.height;
-    const MAX_LIVES = 5;
+    const HARD_MAX_LIVES = 5;
+    const EASY_MAX_LIVES = 10;
     const PARALYSIS_SPACE_PRESSES = 5;
     const keys = new Set();
     const badWords = ["PSOE", "Talante", "^^", "Totalitario", "Falacias", "Orden constitucional", "Conculcación de ley", "Soy de izquierdas"];
@@ -528,6 +576,11 @@
           { x: 132, y: 428, w: 104, h: 66, active: false, cycle: 0, autoCycle: true },
           { x: 430, y: 330, w: 104, h: 66, active: false, cycle: 90, autoCycle: true },
           { x: 712, y: 232, w: 104, h: 66, active: false, cycle: 180, autoCycle: true }
+        ],
+        windContinuations: [
+          { x: 562, y: 172, w: 214, h: 392, active: false, cycle: 0, autoCycle: true },
+          { x: 628, y: 54, w: 214, h: 510, active: false, cycle: 90, autoCycle: true },
+          { x: 394, y: -36, w: 214, h: 600, active: false, cycle: 180, autoCycle: true }
         ],
         doorsTo: []
       },
@@ -817,11 +870,12 @@
     let levelIndex = 0;
     let level = cloneLevel(baseRooms.foyer);
     let currentSister = 0;
+    let selectedDifficulty = "hard";
     let running = false;
     let won = false;
     let lastTime = 0;
     let noteTimer = 0;
-    let lives = MAX_LIVES;
+    let lives = HARD_MAX_LIVES;
     let projectiles = [];
     let soapBubbleTimer = 0;
     let hasKey = false;
@@ -968,6 +1022,14 @@
       return JSON.parse(JSON.stringify(source));
     }
 
+    function maxLives() {
+      return selectedDifficulty === "easy" ? EASY_MAX_LIVES : HARD_MAX_LIVES;
+    }
+
+    function gumDifficultyMultiplier() {
+      return selectedDifficulty === "easy" ? 0.72 : 1;
+    }
+
     function resetLevel() {
       won = false;
       currentRoom = "foyer";
@@ -981,7 +1043,7 @@
         level.captive.y = 372;
       }
       applyPersistentRoomState();
-      lives = MAX_LIVES;
+      lives = maxLives();
       projectiles = [];
       soapBubbleTimer = 0;
       hasKey = false;
@@ -1139,7 +1201,8 @@
       const sister = sisters[currentSister];
       levelLabel.textContent = roomName(currentRoom);
       const penguinHud = penguinIcon ? `<img class="hud-sprite" src="${(decorImages.get("pingui")?.src || assetPath("assets/pingui.png"))}" alt="pingui">` : "";
-      livesLabel.innerHTML = `Vides: <span class="hearts">${"♥".repeat(lives)}${"♡".repeat(MAX_LIVES - lives)}</span> ${hasKey ? "🔑" : ""} ${penguinHud}`;
+      const totalLives = maxLives();
+      livesLabel.innerHTML = `Vides: <span class="hearts">${"♥".repeat(lives)}${"♡".repeat(totalLives - lives)}</span> ${hasKey ? "🔑" : ""} ${penguinHud}`;
       sisterLabel.textContent = sister.name;
       sisterLabel.style.borderColor = sister.color;
       powerLabel.textContent = player.dashCooldown > 0 ? "Dash " + Math.ceil(player.dashCooldown / 60) + "s" : "W cop / Q dash";
@@ -3358,7 +3421,7 @@
         treat.settled = Math.abs(treat.vx || 0) < 0.08 && Math.abs(treat.vy || 0) < 0.08;
         if (treat.settled) treat.vx = 0;
         if (overlaps(player, treat)) {
-          if (lives < MAX_LIVES) lives += 1;
+          if (lives < maxLives()) lives += 1;
           treat.eaten = true;
           pop(treat.kind === "pizza" ? "Pizza!" : treat.kind === "cupcake" ? "Cupcake!" : treat.kind === "formatge" ? "Formatge!" : "Gelat!");
           updateHud();
@@ -3806,7 +3869,8 @@
           }
           return;
         }
-        const speed = bossPhase === "demon" ? 2.25 : bossPhase === "skeleton" ? 1.95 : gum.zombie ? 1.65 : 1.25;
+        const baseSpeed = bossPhase === "demon" ? 2.25 : bossPhase === "skeleton" ? 1.95 : gum.zombie ? 1.65 : 1.25;
+        const speed = baseSpeed * gumDifficultyMultiplier();
         const centerX = gum.x + gum.w / 2;
         const centerY = gum.y + gum.h / 2;
         const food = chooseGumFoodTarget();
@@ -3908,7 +3972,7 @@
         const dx = player.x + player.w / 2 - (gum.x + gum.w / 2);
         const dy = player.y + player.h / 2 - (gum.y + gum.h / 2);
         const dist = Math.max(1, Math.hypot(dx, dy));
-        const speed = bossPhase === "demon" ? 13.5 : 11.5;
+        const speed = (bossPhase === "demon" ? 13.5 : 11.5) * gumDifficultyMultiplier();
         bossCharge = { vx: dx / dist * speed, vy: dy / dist * speed, windup: 18, life: 90 };
         gum.shake = 28;
         return true;
@@ -4123,20 +4187,33 @@
 
     function updateDryerWind() {
       for (const dryer of level.dryers || []) {
-        const wasActive = !!dryer.active;
-        if (dryer.autoCycle) {
-          dryer.cycle = ((dryer.cycle || 0) + 1) % 360;
-          dryer.active = dryer.cycle < 180;
-        }
-        if (!wasActive && dryer.active) playSfx("dryer");
+        updateWindSource(dryer);
         if (!dryer.active) continue;
         dryer.mood = (dryer.mood || 0) + 1;
-        const wind = { x: dryer.x - 46, y: dryer.y - 410, w: 190, h: 435 };
+        const wind = { x: dryer.x - 58, y: dryer.y - 760, w: 214, h: 790 };
         if (player.princessDress && player.gliding && overlaps(player, wind)) {
           player.vy = Math.min(player.vy, -7.4);
           player.vx += 0.25;
         }
       }
+      for (const column of level.windContinuations || []) {
+        updateWindSource(column);
+        if (!column.active) continue;
+        column.mood = (column.mood || 0) + 1;
+        if (player.princessDress && player.gliding && overlaps(player, column)) {
+          player.vy = Math.min(player.vy, -7.4);
+          player.vx += 0.18;
+        }
+      }
+    }
+
+    function updateWindSource(source) {
+      const wasActive = !!source.active;
+      if (source.autoCycle) {
+        source.cycle = ((source.cycle || 0) + 1) % 360;
+        source.active = source.cycle < 180;
+      }
+      if (!wasActive && source.active) playSfx("dryer");
     }
 
     function updateRescueTimers() {
@@ -4748,6 +4825,7 @@
         ctx.fillStyle = "#7cc7ff";
         ctx.fillRect(level.sink.x + 42, level.sink.y - 34, 62, 44);
       }
+      for (const column of level.windContinuations || []) drawWindContinuation(column);
       for (const dryer of level.dryers || []) drawDryer(dryer);
       drawAdriana();
     }
@@ -4755,12 +4833,8 @@
     function drawDryer(dryer) {
       const image = decorImages.get("secador");
       if (dryer.active) {
-        const windLength = 410;
-        const grad = ctx.createLinearGradient(dryer.x + dryer.w / 2, dryer.y, dryer.x + dryer.w / 2, dryer.y - windLength);
-        grad.addColorStop(0, "rgba(124,199,255,0.55)");
-        grad.addColorStop(1, "rgba(124,199,255,0.03)");
-        ctx.fillStyle = grad;
-        roundRect(dryer.x - 36, dryer.y - windLength, dryer.w + 72, windLength + 10, 34);
+        const windLength = 760;
+        drawWindColumn(dryer.x - 36, dryer.y - windLength, dryer.w + 72, windLength + 10, dryer.x + dryer.w / 2, dryer.y);
         ctx.strokeStyle = "rgba(255,255,255,0.5)";
         ctx.lineWidth = 5;
         for (let i = 0; i < 5; i += 1) {
@@ -4775,6 +4849,28 @@
         ctx.fillStyle = dryer.active ? "#ffd166" : "#5f6c88";
         roundRect(dryer.x, dryer.y, dryer.w, dryer.h, 10);
       }
+    }
+
+    function drawWindContinuation(column) {
+      if (!column.active) return;
+      drawWindColumn(column.x, column.y, column.w, column.h, column.x + column.w / 2, column.y + column.h);
+      ctx.strokeStyle = "rgba(255,255,255,0.42)";
+      ctx.lineWidth = 5;
+      for (let i = 0; i < 5; i += 1) {
+        ctx.beginPath();
+        const x = column.x + 18 + i * 42;
+        ctx.moveTo(x, column.y + column.h + 8);
+        ctx.bezierCurveTo(x - 34, column.y + column.h - 150, x + 38, column.y + 260, x - 8, column.y + 24);
+        ctx.stroke();
+      }
+    }
+
+    function drawWindColumn(x, y, w, h, centerX, sourceY) {
+      const grad = ctx.createLinearGradient(centerX, sourceY, centerX, y);
+      grad.addColorStop(0, "rgba(124,199,255,0.55)");
+      grad.addColorStop(1, "rgba(124,199,255,0.03)");
+      ctx.fillStyle = grad;
+      roundRect(x, y, w, h, 34);
     }
 
     function drawAdriana() {
@@ -6781,6 +6877,16 @@
 
     renderSisterChoices();
     loadPortraits();
+
+    difficultyChoices?.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-difficulty]");
+      if (!button) return;
+      selectedDifficulty = button.dataset.difficulty === "easy" ? "easy" : "hard";
+      difficultyChoices.querySelectorAll("button[data-difficulty]").forEach((item) => {
+        item.classList.toggle("active", item === button);
+      });
+      updateHud();
+    });
 
     sisterChoices.addEventListener("click", (event) => {
       const button = event.target.closest("button[data-index]");
