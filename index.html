@@ -6364,11 +6364,20 @@
       try {
         const data = cctx.getImageData(0, 0, c.width, c.height);
         const pixels = data.data;
+        let transparentPixels = 0;
+        for (let i = 3; i < pixels.length; i += 4) {
+          if (pixels[i] < 245) transparentPixels += 1;
+        }
+        const hasRealTransparency = transparentPixels > pixels.length / 4 * 0.01;
         for (let i = 0; i < pixels.length; i += 4) {
           const r = pixels[i];
           const g = pixels[i + 1];
           const b = pixels[i + 2];
           const a = pixels[i + 3];
+          if (hasRealTransparency) {
+            if (a < 18) pixels[i + 3] = 0;
+            continue;
+          }
           const neutral = Math.abs(r - g) < 15 && Math.abs(g - b) < 15;
           const veryLight = r > 220 && g > 220 && b > 220;
           const checkerGrey = neutral && r > 130 && r < 245;
