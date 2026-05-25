@@ -450,7 +450,7 @@
 
     const sisters = [
       {
-        name: "Anne",
+        name: "Ane",
         color: "#56d6a2",
         power: "Doble salt",
         help: "Totes poden fer doble salt."
@@ -511,7 +511,7 @@
         hazards: [],
         destructibles: [],
         paintings: [
-          { id: "foyer-anne", name: "Anne", x: 86, y: 74, w: 96, h: 116, fallen: false },
+          { id: "foyer-anne", name: "Ane", x: 86, y: 74, w: 96, h: 116, fallen: false },
           { id: "foyer-naia", name: "Naia", x: 214, y: 74, w: 96, h: 116, fallen: false },
           { id: "foyer-june", name: "June", x: 342, y: 74, w: 96, h: 116, fallen: false }
         ],
@@ -578,9 +578,9 @@
           { x: 712, y: 232, w: 104, h: 66, active: false, cycle: 180, autoCycle: true }
         ],
         windContinuations: [
-          { x: 562, y: 172, w: 214, h: 392, active: false, cycle: 0, autoCycle: true },
-          { x: 628, y: 54, w: 214, h: 510, active: false, cycle: 90, autoCycle: true },
-          { x: 394, y: -36, w: 214, h: 600, active: false, cycle: 180, autoCycle: true }
+          { x: 562, y: -100, w: 246, h: 680, active: false, cycle: 0, autoCycle: true },
+          { x: 628, y: -100, w: 246, h: 680, active: false, cycle: 90, autoCycle: true },
+          { x: 394, y: -100, w: 246, h: 680, active: false, cycle: 180, autoCycle: true }
         ],
         doorsTo: []
       },
@@ -606,6 +606,11 @@
         dryers: [
           { x: 130, y: 424, w: 104, h: 66, active: false, cycle: 150, autoCycle: true },
           { x: 700, y: 426, w: 104, h: 66, active: false, cycle: 40, autoCycle: true }
+        ],
+        windContinuations: [
+          { x: 57, y: -100, w: 246, h: 680, active: false, cycle: 0, autoCycle: true },
+          { x: 355, y: -100, w: 246, h: 680, active: false, cycle: 90, autoCycle: true },
+          { x: 637, y: -100, w: 246, h: 680, active: false, cycle: 180, autoCycle: true }
         ],
         adriana: { x: 434, y: 26, w: 92, h: 104, hits: 0, rescued: false, talk: 0 },
         wand: { x: 528, y: 84, w: 34, h: 42, taken: false, visible: false },
@@ -2595,6 +2600,23 @@
       return (level.platforms || []).includes(solid) || (level.bouncePads || []).includes(solid);
     }
 
+    function solidFloorY() {
+      const floor = (level.platforms || []).find((solid) => solid.y >= H - 80 && solid.w >= W * 0.72);
+      return floor ? floor.y : null;
+    }
+
+    function clampPlayerToSafeFloor() {
+      const floorY = solidFloorY();
+      if (floorY === null || player.y <= floorY - player.h + 8) return false;
+      player.y = floorY - player.h;
+      player.prevY = player.y;
+      player.vy = 0;
+      player.onGround = true;
+      player.doubleReady = true;
+      player.bubbleTrap = 0;
+      return true;
+    }
+
     function moveActor(actor, solids) {
       actor.x += actor.vx;
       for (const solid of solids) {
@@ -2635,10 +2657,12 @@
       }
 
       actor.x = clamp(actor.x, 0, W - actor.w);
+      if (actor === player && clampPlayerToSafeFloor()) return;
       if (actor === player && ["bathroomUpper1", "bathroomUpper2", "livingUpper", "livingUpper2"].includes(currentRoom)) return;
       if (actor.y > H + 80) {
         if (actor === player && bossScreamActive()) {
-          actor.y = H - actor.h - 34;
+          clampPlayerToSafeFloor();
+          actor.y = Math.min(actor.y, H - actor.h - 34);
           actor.vy = 0;
         } else if (actor === player) lose("Has caigut fora de la pantalla.");
         else {
@@ -2814,24 +2838,24 @@
           w: 56,
           h: 26
         };
-        if (!gum.dead && !noGumRoom(currentRoom) && gum.stun <= 0 && overlaps(lance, gum)) {
+        if (hasSword && !gum.dead && !noGumRoom(currentRoom) && gum.stun <= 0 && overlaps(lance, gum)) {
           playGumMeleeHitSound();
           gum.stun = bossSwordStun();
           gum.shake = 54;
           gum.x = clamp(gum.x + player.facing * 150, 0, W - gum.w);
-          if (hasSword) {
-            gumSwordHits += 1;
-            maybeScheduleBossScream();
-            if (gumSwordHits >= bossHitsNeeded()) killGum();
-          }
+          gumSwordHits += 1;
+          maybeScheduleBossScream();
+          if (gumSwordHits >= bossHitsNeeded()) killGum();
           pop("Embestida contra el Xicle!");
         }
-        for (const hazard of level.hazards || []) {
-          if (overlaps(lance, hazard)) {
-            hazard.vx = player.facing * 12;
-            hazard.vy = -8;
-            hazard.thrown = 120;
-            hazard.shake = 30;
+        if (hasSword) {
+          for (const hazard of level.hazards || []) {
+            if (overlaps(lance, hazard)) {
+              hazard.vx = player.facing * 12;
+              hazard.vy = -8;
+              hazard.thrown = 120;
+              hazard.shake = 30;
+            }
           }
         }
       }
@@ -2896,7 +2920,7 @@
         mountCharge = 0;
         return false;
       }
-      if (mountCharge < 48) {
+      if (mountCharge < 48 || !hasSword) {
         mountCharge = 0;
         punchAction();
         return true;
@@ -3254,6 +3278,7 @@
         player.x = clamp(player.x + dx / d * 3.2, 18, W - player.w - 18);
         player.y = clamp(player.y + dy / d * 1.4, 28, H - player.h - 34);
       }
+      clampPlayerToSafeFloor();
       player.hurt = Math.max(player.hurt, 18);
       player.vx = 0;
       player.vy = 0;
@@ -4190,10 +4215,10 @@
         updateWindSource(dryer);
         if (!dryer.active) continue;
         dryer.mood = (dryer.mood || 0) + 1;
-        const wind = { x: dryer.x - 58, y: dryer.y - 760, w: 214, h: 790 };
+        const wind = { x: dryer.x - 75, y: dryer.y - 1040, w: 246, h: 1080 };
         if (player.princessDress && player.gliding && overlaps(player, wind)) {
-          player.vy = Math.min(player.vy, -7.4);
-          player.vx += 0.25;
+          player.vy = Math.min(player.vy, -8.8);
+          player.vx += 0.12;
         }
       }
       for (const column of level.windContinuations || []) {
@@ -4201,8 +4226,8 @@
         if (!column.active) continue;
         column.mood = (column.mood || 0) + 1;
         if (player.princessDress && player.gliding && overlaps(player, column)) {
-          player.vy = Math.min(player.vy, -7.4);
-          player.vx += 0.18;
+          player.vy = Math.min(player.vy, -8.8);
+          player.vx += 0.08;
         }
       }
     }
@@ -4282,7 +4307,9 @@
     }
 
     function portraitCandidates(name) {
-      const baseNames = [name, name.toLowerCase(), name.toUpperCase()];
+      const baseNames = name === "Ane"
+        ? ["Ane", "ane", "ANE", "Anne", "anne", "ANNE"]
+        : [name, name.toLowerCase(), name.toUpperCase()];
       return baseNames.flatMap((base) => imageExtensions.map((ext) => `assets/${base}.${ext}`));
     }
 
@@ -4339,7 +4366,7 @@
         "tortuga", "elefant", "mussol", "cocodril", "marieta",
         "tortuga reve", "elefant reve", "mussol reve", "cocodril reve", "marieta reve", "porta castell", "estrella magica", "estrella màgica", "estrella magica dreta",
         "xicle dimoni explosio", "xicle dimoni explosió", "xicle derrotat", "declaracio", "asier final", "Donuts", "donuts",
-        "chicle zombie cridant", "xicle zombie cridant", "xicle esquelet cridant", "xicle dimoni cridant"
+        "chicle zombie cridant", "xicle zombie cridant", "xicle esquelet cridant", "xicle dimoni cridant", "ON", "OFF"
       ].forEach((name) => {
         loadFirstImage(assetImageCandidates(name)).then((image) => {
           if (image) decorImages.set(name, image);
@@ -4349,7 +4376,8 @@
 
     function assetImageCandidates(name) {
       const variants = [name, `${name}-sprite`, `${name}_sprite`, `${name} sprite`, `${name}-removebg-preview`];
-      return variants.flatMap((variant) => imageExtensions.map((ext) => `assets/${variant}.${ext}`));
+      const cacheBust = name === "asier final" ? `?v=${Date.now()}` : "";
+      return variants.flatMap((variant) => imageExtensions.map((ext) => `assets/${variant}.${ext}${cacheBust}`));
     }
 
     function loadFirstImage(paths) {
@@ -4705,17 +4733,17 @@
       ctx.moveTo(590, 380);
       ctx.bezierCurveTo(650, 314, 700, 312, plug.x + 10, plug.y + 14);
       ctx.stroke();
-      ctx.fillStyle = "#f7f2e8";
-      roundRect(plug.x + 60, plug.y - 8, 30, 56, 5);
-      ctx.fillStyle = plug.disconnected ? "#7c4f39" : "#f7f2e8";
-      roundRect(plug.x, plug.y, plug.w, plug.h, 5);
-      ctx.fillStyle = "#10161a";
-      ctx.fillRect(plug.x + 14, plug.y + 12, 7, 16);
-      ctx.fillRect(plug.x + 31, plug.y + 12, 7, 16);
-      ctx.fillStyle = plug.disconnected ? "#29363c" : "#ffd166";
-      ctx.beginPath();
-      ctx.arc(plug.x + 74, plug.y + 20, 5, 0, Math.PI * 2);
-      ctx.fill();
+      const plugImage = decorImages.get(plug.disconnected ? "OFF" : "ON");
+      if (plugImage) {
+        drawAssetContain(plugImage, plug.x - 6, plug.y - 10, plug.w + 36, plug.h + 28);
+      } else {
+        ctx.fillStyle = plug.disconnected ? "#7c4f39" : "#f7f2e8";
+        roundRect(plug.x, plug.y, plug.w, plug.h, 5);
+        ctx.fillStyle = plug.disconnected ? "#29363c" : "#ffd166";
+        ctx.font = "900 16px Inter, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(plug.disconnected ? "OFF" : "ON", plug.x + plug.w / 2, plug.y + 26);
+      }
 
       if (level.captive?.id === "washer" && !level.captive.ejected && rescued.washer === undefined) {
         const names = sisters.filter((_, index) => index !== currentSister).map((s) => s.name);
@@ -4833,14 +4861,14 @@
     function drawDryer(dryer) {
       const image = decorImages.get("secador");
       if (dryer.active) {
-        const windLength = 760;
-        drawWindColumn(dryer.x - 36, dryer.y - windLength, dryer.w + 72, windLength + 10, dryer.x + dryer.w / 2, dryer.y);
+        const windLength = 1040;
+        drawWindColumn(dryer.x - 75, dryer.y - windLength, dryer.w + 150, windLength + 30, dryer.x + dryer.w / 2, dryer.y);
         ctx.strokeStyle = "rgba(255,255,255,0.5)";
         ctx.lineWidth = 5;
         for (let i = 0; i < 5; i += 1) {
           ctx.beginPath();
           ctx.moveTo(dryer.x - 18 + i * 28, dryer.y - 12);
-          ctx.bezierCurveTo(dryer.x - 40 + i * 24, dryer.y - 150, dryer.x + 28 + i * 18, dryer.y - 280, dryer.x - 10 + i * 26, dryer.y - 400);
+          ctx.bezierCurveTo(dryer.x - 58 + i * 32, dryer.y - 260, dryer.x + 48 + i * 24, dryer.y - 560, dryer.x - 8 + i * 34, dryer.y - 920);
           ctx.stroke();
         }
       }
@@ -5127,8 +5155,7 @@
     function drawLairGumDream() {
       let key = "";
       let box = { x: 0, y: 238, w: 192, h: 188 };
-      if ((bossPhase === "normal" && !gumDead) || (!gumZombie && !gumDead)) key = "constitucio xicle";
-      else if ((bossPhase === "normal" && gumDead) || (bossPhase === "demon" && gumDead)) {
+      if (bossPhase === "demon" && gumDead) {
         key = "constitucio espanyola";
         box = { x: -12, y: 112, w: 360, h: 306 };
       } else if (bossPhase === "demon") {
@@ -5137,6 +5164,8 @@
       } else if (bossPhase === "zombie" || bossPhase === "skeleton") {
         key = "bombolla verd";
         box = { x: -50, y: 206, w: 236, h: 224 };
+      } else {
+        key = "constitucio xicle";
       }
       const image = key ? decorImages.get(key) : null;
       if (freedomEvent && key === "constitucio espanyola") {
@@ -6065,9 +6094,26 @@
       ctx.save();
       const charge = clamp(mountCharge / 80, 0, 1);
       ctx.globalAlpha = 0.85;
-      ctx.translate(cx + player.facing * (34 + charge * 24), player.y + 1);
-      ctx.rotate(player.facing > 0 ? Math.PI / 2 : -Math.PI / 2);
-      drawSwordGraphic(1.25 + charge * 0.35);
+      if (hasSword) {
+        ctx.translate(cx + player.facing * (34 + charge * 24), player.y + 1);
+        ctx.rotate(player.facing > 0 ? Math.PI / 2 : -Math.PI / 2);
+        drawSwordGraphic(1.25 + charge * 0.35);
+      } else {
+        const shoulderX = cx + player.facing * 11;
+        const fistX = cx + player.facing * (28 + charge * 16);
+        const armY = player.y + 23;
+        ctx.strokeStyle = "#f7d6bd";
+        ctx.lineWidth = 8;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(shoulderX, armY);
+        ctx.lineTo(fistX, armY - 2);
+        ctx.stroke();
+        ctx.fillStyle = "#f7d6bd";
+        ctx.beginPath();
+        ctx.arc(fistX, armY - 2, 11 + charge * 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
       ctx.save();
       ctx.fillStyle = "rgba(255, 209, 102, 0.24)";
